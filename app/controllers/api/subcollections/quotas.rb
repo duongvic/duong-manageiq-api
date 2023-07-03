@@ -1,0 +1,50 @@
+module Api
+  module Subcollections
+    module Quotas
+      INVALID_QUOTA_ATTRS = %w(id href tenant_id unit).freeze
+
+      def custom_api_user_role_allows_method?(identifier)
+        MiqProductFeature.my_root_tenant_identifier?(identifier)
+      end
+
+      def custom_api_user_role_allows?(identifier)
+        tenant_identifier = MiqProductFeature.tenant_identifier(identifier, @req.collection_id)
+        User.current_user.role_allows?(:identifier => tenant_identifier)
+      end
+
+      def quotas_create_resource(object, type, _id, data)
+        bad_attrs = data.keys & INVALID_QUOTA_ATTRS
+        errmsg = "Attributes %s should not be specified for creating a new tenant quota resource"
+        raise(BadRequestError, errmsg % bad_attrs.join(", ")) if bad_attrs.any?
+
+        data['tenant_id'] = object.id
+        quota = collection_class(type).create(data)
+        if quota.invalid?
+          raise BadRequestError, "Failed to add a new tenant quota resource - #{quota.errors.full_messages.join(', ')}"
+        end
+        quota
+      end
+
+      def quotas_query_resource(object)
+        klass = collection_class(:quotas)
+        object ? klass.where(:tenant_id => object.id) : {}
+      end
+
+      def quotas_edit_resource(_object, type, id, data)
+        bad_attrs = data.keys & INVALID_QUOTA_ATTRS
+        errmsg = "Attributes %s should not be specified for updating a quota resource"
+        raise(BadRequestError, errmsg % bad_attrs.join(", ")) if bad_attrs.any?
+
+        edit_resource(type, id, data)
+      end
+
+      def delete_resource_quotas(_object, type, id, data)
+        delete_resource(type, id, data)
+      end
+
+      def quotas_delete_resource(_object, type, id, data)
+        delete_resource(type, id, data)
+      end
+    end
+  end
+end
